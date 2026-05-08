@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "64908334976",
+    "project_id": "orbit-47bed",
+    "storage_bucket": "orbit-47bed.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:64908334976:android:379bdb970220fe8399d365",
+        "android_client_info": {
+          "package_name": "com.example.chat_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "64908334976-mnbqpc9rbcjvd4un4s450btjd97m9ke9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.chat_app",
+            "certificate_hash": "2d13c28d1406382004a635fe4e17b716daf48ea8"
+          }
+        },
+        {
+          "client_id": "64908334976-e0ess2lh03lmmlaqb3i48qre6tm639ih.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0qO6E1c690NXuuKizjS0ia5k20Qq_2fQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "64908334976-e0ess2lh03lmmlaqb3i48qre6tm639ih.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "64908334976-v5tlv7vmnokc4hvnr1ka9dbv3c99qku6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.chatApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
