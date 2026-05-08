@@ -81,45 +81,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(width: mq.width,height: mq.height*0.05,),
                 Stack(
                   children: [
-                    //profile pic
-                    _image!=null?
-                        //local img
+                    // Profile Picture Display Logic
+                    _image != null
+                        ? // 1. Show Local Preview: This shows the file immediately after picking
                     ClipRRect(
-                borderRadius: BorderRadius.circular(mq.height * 0.3),
-            child: Image.file(
-              File(_image!),
-              width: mq.height * 0.2,
-              height: mq.height * 0.2,
-              fit: BoxFit.fill,
-
-            ),
-          ) :
-
-//img from server
+                      borderRadius: BorderRadius.circular(mq.height * 0.3),
+                      child: Image.file(
+                        File(_image!),
+                        width: mq.height * 0.2,
+                        height: mq.height * 0.2,
+                        fit: BoxFit.fill,
+                      ),
+                    )
+                        : // 2. Show Server Image: Use APIs.me.image so it reflects updates instantly
                     ClipRRect(
                       borderRadius: BorderRadius.circular(mq.height * 0.3),
                       child: CachedNetworkImage(
                         width: mq.height * 0.2,
                         height: mq.height * 0.2,
                         fit: BoxFit.fill,
-                        imageUrl: widget.user.image,
-                        placeholder:(context,url)=>CircularProgressIndicator(),
-                        errorWidget:(context,url,error)=>CircleAvatar(child: Icon(Icons.person)),
+                        // ✅ FIXED: Changed widget.user.image to APIs.me.image
+                        imageUrl: APIs.me.image,
+                        placeholder: (context, url) => const CircularProgressIndicator(),
+                        errorWidget: (context, url, error) => const CircleAvatar(
+                          child: Icon(Icons.person),
+                        ),
                       ),
                     ),
 
+                    // Edit Button
                     Positioned(
                       bottom: 0,
                       right: 0,
                       child: MaterialButton(
-                        onPressed: (){
-                          // (image picker logic can go here)
+                        onPressed: () {
                           _showBottomSheet();
                         },
                         elevation: 1,
-                        shape: CircleBorder(),
+                        shape: const CircleBorder(),
                         color: Colors.white,
-                        child: Icon(Icons.edit),
+                        child: const Icon(Icons.edit),
                       ),
                     ),
                   ],
@@ -171,21 +172,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     shape: const StadiumBorder(),
                     minimumSize: Size(mq.width * .5, mq.height * .06),
                   ),
+                  // Replace your ElevatedButton.icon onPressed with this:
                   onPressed: () async {
-                    if(_formKey.currentState!.validate()){
+                    if (_formKey.currentState!.validate()) {
+                      Dialogs.showLoading(context);
 
-                      // ✅ CHANGED: Directly assign from controllers
+                      bool success = true;
+
+                      if (_image != null) {
+                        success = await APIs.updateProfileImage(File(_image!));
+                      }
+
                       APIs.me.name = nameController.text;
                       APIs.me.about = aboutController.text;
-
-                      log("NEW NAME: ${APIs.me.name}"); // ✅ DEBUG
-                      log("NEW ABOUT: ${APIs.me.about}");
-
                       await APIs.updateUserInfo();
 
-                      Dialogs.showSnackbar(context,'Profile Updated Successfully');
+                      if (!context.mounted) return;
+                      Navigator.pop(context); // close loading
 
-                      log('inside validator');
+                      if (success) {
+                        Dialogs.showSnackbar(context, 'Profile Updated Successfully ✅');
+                      } else {
+                        Dialogs.showSnackbar(context, '⚠️ Info saved but image upload failed');
+                      }
                     }
                   },
                   icon: const Icon(Icons.edit, size: 28),
@@ -235,18 +244,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fixedSize: Size(mq.width * .3, mq.height * .15),
                 ),
                 onPressed: () async {
-                  final picker = ImagePicker();
-                  // Pick an image.
-                  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-                  if(image!=null){
-                    log('Image path: ${image.path} -- MimeType: ${image.mimeType} ');
-                    setState(() {
-                      _image=image.path;
-                    });
-                    Navigator.pop(context);
-                  }
-
-                }, child: Image.asset('assets/images/add_image.png'),),
+                final picker = ImagePicker();
+                final XFile? image = await picker.pickImage(
+                source: ImageSource.gallery,
+               imageQuality: 70 // ✅ Fixed: Compresses to pass the 5MB check
+                );
+                if(image != null){
+               setState(() { _image = image.path; });
+               Navigator.pop(context);
+               }
+          }, child: Image.asset('assets/images/add_image.png'),),
 
               //take picture from camera button
               ElevatedButton(
@@ -255,18 +262,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: const CircleBorder(),
                   fixedSize: Size(mq.width * .3, mq.height * .15),
                 ),
+                // Inside _showBottomSheet for Camera
                 onPressed: () async {
                   final picker = ImagePicker();
-                  // Pick an image.
-                  final XFile? image = await picker.pickImage(source: ImageSource.camera);
-                  if(image!=null){
-                    log('Image path: ${image.path} -- MimeType: ${image.mimeType} ');
+                  final XFile? image = await picker.pickImage(
+                      source: ImageSource.camera,
+                      imageQuality: 70 // ✅ ESSENTIAL: Shrinks camera photo to pass the 5MB check
+                  );
+                  if (image != null) {
                     setState(() {
-                      _image=image.path;
+                      _image = image.path;
                     });
                     Navigator.pop(context);
                   }
-
                 },
                 child: Image.asset('assets/images/camera.png'),
               ),
