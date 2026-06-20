@@ -192,9 +192,6 @@ Recipient receives notification
 
 **Nehul Agarwal**
 
-B.Tech Computer Science & Engineering
-SRM Institute of Science & Technology
-
 GitHub: https://github.com/nehulagarwal
 
 ---
