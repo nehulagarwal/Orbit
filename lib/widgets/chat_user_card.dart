@@ -45,21 +45,27 @@ class _ChatUserCardState extends State<ChatUserCard> {
           return ListTile(
               title: Text(widget.user.name),
 
-              subtitle:  Text( _message!= null ?  _message!.msg:
+              subtitle:  Text( _message!= null ?  _message!.type==Type.image? 'Image': _message!.msg:
                 widget.user.about,
                 maxLines: 1,
               ),
 
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(mq.height * 0.3),
-                child: CachedNetworkImage(
-                  width: mq.height * 0.055,
-                  height: mq.height * 0.055,
-                  imageUrl:
-                  widget.user.image
-                  ,
-                  placeholder:(context,url)=>CircularProgressIndicator() ,
-                  errorWidget:(context,url,error)=>CircleAvatar(child: Icon(Icons.person)) ,
+              leading: InkWell(
+                onTap: (){
+                  showDialog(context: context, builder: (_)=> ProfileDialog(user: widget.user)  );
+                },
+
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(mq.height * 0.3),
+                  child: CachedNetworkImage(
+                    width: mq.height * 0.055,
+                    height: mq.height * 0.055,
+                    imageUrl:
+                    widget.user.image
+                    ,
+                    placeholder:(context,url)=>CircularProgressIndicator() ,
+                    errorWidget:(context,url,error)=>CircleAvatar(child: Icon(Icons.person)) ,
+                  ),
                 ),
               ),
 

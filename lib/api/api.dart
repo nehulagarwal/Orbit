@@ -4,185 +4,289 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:http/http.dart';
+import 'package:http/http.dart' as http;
 import '../models/chat_user.dart';
 import '../models/message.dart' as msg_model;
 import 'notification_access_token.dart';
-import "package:chat_app/services/cloudinary_service.dart"; // adjust path
+import 'package:chat_app/services/cloudinary_service.dart';
 
-
-class APIs{
-  //authentication
+class APIs {
+  // ── Auth & Firestore ───────────────────────────────────────────────────────
   static FirebaseAuth auth = FirebaseAuth.instance;
-
-  // for storing self information
-
-
-  //firestore
   static FirebaseFirestore firestore = FirebaseFirestore.instance;
-  static get user=>auth.currentUser!;
+  static User get user => auth.currentUser!;
 
   static ChatUser me = ChatUser(
+    id: user.uid,
+    name: user.displayName.toString(),
+    email: user.email.toString(),
+    about: "Hey, I'm using Orbit!",
+    image: user.photoURL.toString(),
+    createdAt: '',
+    isOnline: false,
+    lastActive: '',
+    pushToken: '',
+  );
+
+  // ── FCM token ──────────────────────────────────────────────────────────────
+  static FirebaseMessaging fmessaging = FirebaseMessaging.instance;
+
+  static Future<void> getFirebaseMessagingToken() async {
+    await fmessaging.requestPermission();
+
+    // FIX: await the token properly so updateActiveStatus saves it
+    final t = await fmessaging.getToken();
+    if (t != null) {
+      me.pushToken = t;
+      log('✅ FCM token: $t');
+    }
+
+    // Listen for token refresh
+    fmessaging.onTokenRefresh.listen((newToken) {
+      me.pushToken = newToken;
+      // Save refreshed token to Firestore immediately
+      firestore
+          .collection('users')
+          .doc(user.uid)
+          .update({'push_token': newToken});
+      log('🔄 FCM token refreshed: $newToken');
+    });
+  }
+
+  // ── User info ──────────────────────────────────────────────────────────────
+  static Future<void> getSelfInfo() async {
+    await firestore.collection('users').doc(user.uid).get().then((u) async {
+      if (u.exists) {
+        me = ChatUser.fromJson(u.data()!);
+        await getFirebaseMessagingToken(); // await so token is ready
+        APIs.updateActiveStatus(true);    // now push_token is non-empty
+        log('My Data: ${u.data()}');
+      } else {
+        await createUser().then((_) => getSelfInfo());
+      }
+    });
+  }
+
+  static Future<void> createUser() async {
+    final time = DateTime.now().millisecondsSinceEpoch.toString();
+    final chatUser = ChatUser(
       id: user.uid,
       name: user.displayName.toString(),
       email: user.email.toString(),
       about: "Hey, I'm using Orbit!",
       image: user.photoURL.toString(),
-      createdAt: '',
+      createdAt: time,
       isOnline: false,
-      lastActive: '',
-      pushToken: '');
+      lastActive: time,
+      pushToken: '',
+    );
+    return firestore.collection('users').doc(user.uid).set(chatUser.toJson());
+  }
 
-//check if user exist?
-  static Future<void> getSelfInfo() async {
-    await firestore.collection('users').doc(user.uid).get().then((user) async {
-      if (user.exists) {
-        me = ChatUser.fromJson(user.data()!);
-        // await getFirebaseMessagingToken();
-        //
-        // //for setting user status to active
-        // APIs.updateActiveStatus(true);
-        log('My Data: ${user.data()}');
-      } else {
-        await createUser().then((value) => getSelfInfo());
-      }
+  static Future<bool> userExists() async =>
+      (await firestore.collection('users').doc(user.uid).get()).exists;
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getMyUsersId() =>
+      firestore.collection('users').doc(user.uid).collection('my_users').snapshots();
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllUsers() =>
+      firestore.collection('users').where('id', isNotEqualTo: user.uid).snapshots();
+
+  static Future<void> updateUserInfo() async {
+    try {
+      await firestore.collection('users').doc(user.uid).update({
+        'name': me.name,
+        'about': me.about,
+      });
+      log('✅ User info updated');
+    } catch (e) {
+      log('❌ updateUserInfo: $e');
+    }
+  }
+
+  static Future<bool> updateProfileImage(File imageFile) async {
+    if (auth.currentUser == null) return false;
+    final imageUrl = await CloudinaryService.uploadImage(imageFile);
+    if (imageUrl == null || imageUrl.isEmpty) return false;
+    try {
+      await firestore.collection('users').doc(user.uid).update({'image': imageUrl});
+      me.image = imageUrl;
+      log('✅ Profile image saved');
+      return true;
+    } catch (e) {
+      log('❌ updateProfileImage Firestore: $e');
+      return false;
+    }
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getUserInfo(ChatUser chatUser) =>
+      firestore.collection('users').where('id', isEqualTo: chatUser.id).snapshots();
+
+  static Future<void> updateActiveStatus(bool isOnline) async {
+    firestore.collection('users').doc(user.uid).update({
+      'is_online': isOnline,
+      'last_active': DateTime.now().millisecondsSinceEpoch.toString(),
+      'push_token': me.pushToken,
     });
   }
 
+  // ── Conversation helpers ───────────────────────────────────────────────────
+  static String getConversationID(String id) =>
+      user.uid.hashCode <= id.hashCode
+          ? '${user.uid}_$id'
+          : '${id}_${user.uid}';
 
-//to create a new user
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllMessages(ChatUser u) =>
+      firestore
+          .collection('chats/${getConversationID(u.id)}/messages/')
+          .orderBy('sent', descending: true)
+          .snapshots();
 
-  static Future<void> createUser()async{
-    final time = DateTime.now().millisecondsSinceEpoch.toString();
+  static Stream<QuerySnapshot<Map<String, dynamic>>> getLastMessage(ChatUser u) =>
+      firestore
+          .collection('chats/${getConversationID(u.id)}/messages/')
+          .orderBy('sent', descending: true)
+          .limit(1)
+          .snapshots();
 
-    final chatUser = ChatUser(
-        id: user.uid,
-        name: user.displayName.toString(),
-        email: user.email.toString(),
-        about: "Hey, I'm using Orbit!",
-        image: user.photoURL.toString(),
-        createdAt: time,
-        isOnline: false,
-        lastActive: time,
-        pushToken: '');
-
-    return await firestore
-        .collection('users')
-        .doc(user.uid)
-        .set(chatUser.toJson());
-  }
-
-  // for checking if user exists or not?
-  static Future<bool> userExists() async {
-    return (await firestore.collection('users').doc(user.uid).get()).exists;
-  }
-
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getMyUsersId() {
-    return firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('my_users')
-        .snapshots();
-  }
-
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllUsers() {
-    return firestore
-        .collection('users')
-        .where('id', isNotEqualTo: user.uid)
-        .snapshots();
-  }
-  static Future<void> updateUserInfo() async {
-    try {
-      log("Updating user...");
-      log("UID: ${user.uid}");
-      log("Name: ${me.name}");
-      log("About: ${me.about}");
-
-      await firestore.collection('users').doc(user.uid).update({
-        "name": me.name,
-        "about": me.about,
-      });
-
-      log("✅ FIRESTORE UPDATED SUCCESSFULLY");
-    } catch (e) {
-      log("❌ ERROR: $e");
-    }
-  }
-
-  // user profile image using cloudinary
-  static Future<bool> updateProfileImage(File imageFile) async {
-    if (auth.currentUser == null) {
-      log('❌ updateProfileImage: no authenticated user');
-      return false;
-    }
-
-    // This matches your CloudinaryService.uploadImage(File imageFile) definition
-    final imageUrl = await CloudinaryService.uploadImage(imageFile);
-
-    if (imageUrl == null || imageUrl.isEmpty) {
-      log('❌ updateProfileImage: upload failed');
-      return false;
-    }
-
-    try {
-      await firestore
-          .collection('users')
-          .doc(user.uid)
-          .update({'image': imageUrl});
-
-      me.image = imageUrl;
-      log('✅ Profile image saved for ${user.uid}');
-      return true;
-    } catch (e) {
-      log('❌ Firestore Update Error: $e');
-      return false;
-    }
-  }
-
-  ///********************** chat screen related apis **********************************
-  ///  chats(coll) -> conv_id(doc) -> msg(coll)->msg(doc)
-
-  static String getConversationID(String id) => user.uid.hashCode <= id.hashCode
-      ? '${user.uid}_$id'
-      : '${id}_${user.uid}';
-
-  // to get all msg for a specific convo from firestore
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getAllMessages(ChatUser user) {
-    return firestore
-        .collection('chats/${getConversationID(user.id)}/messages/').snapshots();
-  }
-
-
-  static Future<void> sendMessage(ChatUser chatUser, String msg) async{
-
-    //message sending time (also used as id)
-    final time = DateTime.now().millisecondsSinceEpoch.toString();
-
-    //message to send
-    final msg_model.Message message = msg_model.Message(
-        toId: chatUser.id,
-        msg: msg,
-        read: '',
-        type: msg_model.Type.text,
-        fromId: user.uid,
-        sent: time);
-    final ref= firestore.collection('chats/${getConversationID(chatUser.id)}/messages/');
-    await ref.doc(time).set(message.toJson());
-
-  }
-
-  //update read status of message
   static Future<void> updateMessageReadStatus(msg_model.Message message) async {
     firestore
-        .collection('chats/${getConversationID(message.fromId)}/messages/').doc(message.sent).update({'read': DateTime.now().millisecondsSinceEpoch.toString()});
+        .collection('chats/${getConversationID(message.fromId)}/messages/')
+        .doc(message.sent)
+        .update({'read': DateTime.now().millisecondsSinceEpoch.toString()});
   }
 
-  //get only last message of a specific chat
-  static Stream<QuerySnapshot<Map<String, dynamic>>> getLastMessage(ChatUser user) {
-    return firestore
-        .collection('chats/${getConversationID(user.id)}/messages/')
-        .orderBy('sent', descending: true).limit(1).snapshots();
+  // ── Send text message ──────────────────────────────────────────────────────
+  static Future<void> sendMessage(ChatUser chatUser, String msg) async {
+    final time = DateTime.now().millisecondsSinceEpoch.toString();
+
+    final message = msg_model.Message(
+      toId: chatUser.id,
+      msg: msg,
+      read: '',
+      type: msg_model.Type.text,
+      fromId: user.uid,
+      sent: time,
+    );
+
+    await firestore
+        .collection('chats/${getConversationID(chatUser.id)}/messages/')
+        .doc(time)
+        .set(message.toJson());
+
+    // Send push notification to recipient
+    await sendPushNotification(
+      chatUser: chatUser,
+      msg: msg,
+      msgType: 'text',
+    );
   }
 
+  // ── Send image message ─────────────────────────────────────────────────────
+  static Future<void> sendChatImage(ChatUser chatUser, File file) async {
+    final conversationId = getConversationID(chatUser.id);
+    log('📸 Uploading chat image for conversation: $conversationId');
+
+    final imageUrl = await CloudinaryService.uploadChatImage(
+      imageFile: file,
+      conversationId: conversationId,
+    );
+
+    if (imageUrl == null || imageUrl.isEmpty) {
+      log('❌ sendChatImage: Cloudinary upload failed');
+      return;
+    }
+
+    final time = DateTime.now().millisecondsSinceEpoch.toString();
+
+    final message = msg_model.Message(
+      toId: chatUser.id,
+      msg: imageUrl,
+      read: '',
+      type: msg_model.Type.image,
+      fromId: user.uid,
+      sent: time,
+    );
+
+    await firestore
+        .collection('chats/$conversationId/messages/')
+        .doc(time)
+        .set(message.toJson());
+
+    log('✅ Chat image message saved to Firestore');
+
+    // Send push notification to recipient
+    await sendPushNotification(
+      chatUser: chatUser,
+      msg: 'Sent you a photo 📸',
+      msgType: 'image',
+    );
+  }
+
+  // ── Push notification via FCM HTTP v1 API ──────────────────────────────────
+  static Future<void> sendPushNotification({
+    required ChatUser chatUser,
+    required String msg,
+    required String msgType, // 'text' or 'image'
+  }) async {
+    // Don't send if recipient has no token
+    if (chatUser.pushToken.isEmpty) {
+      log('⚠️ No push token for ${chatUser.name}, skipping notification');
+      return;
+    }
+
+    try {
+      // 1. Get a fresh OAuth2 access token
+      final accessToken = await getAccessToken();
+      if (accessToken == null) {
+        log('❌ sendPushNotification: could not get access token');
+        return;
+      }
+
+      // 2. Build the FCM v1 message payload
+      final body = jsonEncode({
+        'message': {
+          'token': chatUser.pushToken,
+          'notification': {
+            'title': me.name,                    // sender's name as title
+            'body': msgType == 'image' ? 'Sent you a photo 📸' : msg,
+          },
+          'data': {
+            'senderId':   user.uid,
+            'senderName': me.name,
+            'msgType':    msgType,
+          },
+          'android': {
+            'priority': 'high',
+            'notification': {'sound': 'default'},
+          },
+          'apns': {
+            'payload': {
+              'aps': {'sound': 'default'},
+            },
+          },
+        },
+      });
+
+      // 3. POST to FCM HTTP v1
+      final response = await http.post(
+        Uri.parse(
+          'https://fcm.googleapis.com/v1/projects/orbit-47bed/messages:send',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        log('✅ Notification sent to ${chatUser.name}');
+      } else {
+        log('❌ FCM error ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      log('❌ sendPushNotification exception: $e');
+    }
+  }
 }
