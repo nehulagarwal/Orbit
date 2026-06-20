@@ -1,79 +1,122 @@
-# Orbit – Flutter Chat Application
+# 🚀 Orbit - Flutter Chat Application
 
-## 📌 Overview
-Orbit is a modern real-time chat application built using Flutter and Firebase. The app provides seamless communication with features like instant messaging, authentication, image sharing, and online/offline user status tracking. It is designed with a clean and responsive UI to deliver a smooth user experience across multiple platforms.
+Orbit is a modern real-time chat application built with Flutter, Firebase, and Cloudinary. It supports instant messaging, image sharing, Google Authentication, user profiles, online/offline status tracking, and Firebase Cloud Messaging (FCM) notifications.
 
 ---
 
-## 🚀 Features
-- 🔐 User Authentication (Login & Signup)
-- 💬 Real-Time Messaging
-- 🟢 Online/Offline Status
-- 📷 Image Sharing Support
-- 🔔 Push Notifications
-- 🎨 Responsive & Modern UI
-- ☁️ Firebase Integration
-- ⚡ Smooth Performance Across Devices
+## ✨ Features
+
+* 🔐 Google Sign-In Authentication
+* 💬 Real-Time Messaging
+* 📸 Image Sharing via Cloudinary
+* 👤 User Profile Management
+* 🟢 Online/Offline Status
+* 🔔 Push Notifications using Firebase Cloud Messaging (FCM)
+* 🔍 User Search
+* ☁️ Cloud Firestore Backend
+* 📱 Responsive Flutter UI
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- Flutter
-- Dart
+
+* Flutter
+* Dart
 
 ### Backend & Services
-- Firebase Authentication
-- Cloud Firestore
-- Firebase Storage
-- Firebase Cloud Messaging
+
+* Firebase Authentication
+* Cloud Firestore
+* Firebase Cloud Messaging (FCM)
+* Cloudinary
 
 ---
 
 ## 📂 Project Structure
 
-```bash
+```text
 lib/
- ├── api/
- ├── models/
- ├── screens/
- ├── widgets/
- ├── main.dart
+├── api/
+│   ├── api.dart
+│   └── notification_access_token.dart
+│
+├── models/
+├── screens/
+├── services/
+│   └── cloudinary_service.dart
+├── widgets/
+└── main.dart
 ```
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Setup
 
-### 1️⃣ Clone the Repository
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/nehulagarwal/Orbit.git
-```
-
-### 2️⃣ Navigate to Project Directory
-
-```bash
 cd Orbit
 ```
 
-### 3️⃣ Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 flutter pub get
 ```
 
-### 4️⃣ Configure Firebase
-- Create a Firebase project
-- Add Android/iOS app
-- Download `google-services.json` and place it inside:
+### 3. Configure Firebase
+
+Create your own Firebase project and connect it using FlutterFire:
 
 ```bash
-android/app/
+flutterfire configure
 ```
 
-### 5️⃣ Run the Application
+This generates:
+
+```text
+lib/firebase_options.dart
+```
+
+---
+
+### 4. Configure Push Notifications
+
+The repository intentionally excludes:
+
+```text
+lib/api/notification_access_token.dart
+```
+
+Create this file and add your Firebase Service Account credentials.
+
+Generate credentials from:
+
+Firebase Console → Project Settings → Service Accounts → Generate New Private Key
+
+⚠️ Never commit this file to GitHub.
+
+---
+
+### 5. Configure Cloudinary
+
+Update:
+
+```dart
+lib/services/cloudinary_service.dart
+```
+
+with your own:
+
+* Cloud Name
+* Upload Preset
+
+---
+
+### 6. Run the App
 
 ```bash
 flutter run
@@ -81,22 +124,81 @@ flutter run
 
 ---
 
-## 📸 Screenshots
-_Add your application screenshots here._
+## 🔒 Important Security Notes
+
+The following files are intentionally excluded from GitHub:
+
+```text
+lib/firebase_options.dart
+lib/api/notification_access_token.dart
+```
+
+Reason:
+
+* `firebase_options.dart` contains Firebase project configuration.
+* `notification_access_token.dart` contains Firebase Service Account credentials used for FCM HTTP v1 authentication.
+
+If you clone this project, you must generate these files yourself before running the application.
+
+Never commit:
+
+* Firebase Service Account Keys
+* Private Keys
+* API Secrets
+* OAuth Credentials
 
 ---
 
-## 🎯 Future Improvements
-- Voice & Video Calling
-- Message Reactions
-- End-to-End Encryption
-- Group Chats
-- Dark Mode
+## ☁️ Cloudinary Storage Structure
+
+```text
+orbit/
+├── profile_pics/
+│   └── {firebase_uid}/
+└── chat_images/
+    └── {conversation_id}/
+```
 
 ---
 
-## 👨‍💻 Author
+## 🔔 Notification Flow
+
+```text
+User A sends message
+        ↓
+Message stored in Firestore
+        ↓
+FCM HTTP v1 API called
+        ↓
+Push Notification sent
+        ↓
+Recipient receives notification
+```
+
+---
+
+## 🎯 Future Enhancements
+
+* Group Chats
+* Voice Messages
+* Video Calling
+* Message Reactions
+* End-to-End Encryption
+* AI Chat Assistant
+
+---
+
+## 👨‍💻 Developer
 
 **Nehul Agarwal**
 
-- GitHub: https://github.com/nehulagarwal
+B.Tech Computer Science & Engineering
+SRM Institute of Science & Technology
+
+GitHub: https://github.com/nehulagarwal
+
+---
+
+## ⭐ Support
+
+If you found this project useful, consider giving it a star.
